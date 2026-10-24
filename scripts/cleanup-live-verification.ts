@@ -1,0 +1,5 @@
+import {createClient} from '@supabase/supabase-js';
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL!;if(new URL(url).host!=='jxduyylphokqpignybpz.supabase.co')throw Error('Wrong project');
+const db=createClient(url,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}});
+async function main(){const found=await db.from('leads').select('id,name').eq('is_historical',false).is('deleted_at',null).like('name','VERIFICATION ONLY %');if(found.error)throw found.error;for(const row of found.data){if(!/^VERIFICATION ONLY [0-9a-f-]{36}$/.test(row.name))continue;const child=await db.from('interactions').update({deleted_at:new Date().toISOString()}).eq('lead_id',row.id).eq('is_historical',false).is('deleted_at',null);if(child.error)throw child.error;const parent=await db.from('leads').update({deleted_at:new Date().toISOString()}).eq('id',row.id).eq('is_historical',false);if(parent.error)throw parent.error;console.log('Soft-deleted one marked synthetic verification lead and its nonhistorical interactions.');}}
+main().catch(e=>{console.error(e.message);process.exitCode=1;});

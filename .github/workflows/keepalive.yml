@@ -1,0 +1,30 @@
+name: Keep database awake
+
+# The free Supabase plan pauses a project after about a week with no activity.
+# This asks the database for the time every 3 days, which counts as activity.
+on:
+  schedule:
+    - cron: "0 4 */3 * *"   # 04:00 UTC (09:30 IST) on every 3rd day of the month
+  workflow_dispatch: {}       # lets you press "Run workflow" by hand to test it
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Add the SUPABASE_URL and SUPABASE_ANON_KEY repository secrets (see docs/SETUP.md)."; exit 1
+          fi
+          response=$(curl --fail --silent --show-error --max-time 30 \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/ping" \
+            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" -d '{}')
+          echo "Database answered: $response"

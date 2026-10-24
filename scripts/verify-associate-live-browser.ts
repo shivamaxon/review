@@ -1,0 +1,33 @@
+import {chromium,expect} from '@playwright/test';
+import {createClient} from '@supabase/supabase-js';
+import {randomUUID,createHash} from 'node:crypto';
+import {writeFileSync} from 'node:fs';
+const url=process.env.NEXT_PUBLIC_SUPABASE_URL!;if(new URL(url).host!=='jxduyylphokqpignybpz.supabase.co')throw Error('Wrong live project');
+const admin=createClient(url,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+async function main(){
+ const results:string[]=[];let leadId:string|undefined;
+ async function snapshot(){const result:Record<string,string>={};for(const table of ['profiles','projects','cp_firms','channel_partners','leads','interactions','cp_interactions','bookings','data_quality_issues']){const rows=[];for(let i=0;;i+=1000){const r=await admin.from(table).select('*').eq('is_historical',true).order('id').range(i,i+999);if(r.error)throw r.error;rows.push(...r.data);if(r.data.length<1000)break;}result[table]=createHash('sha256').update(JSON.stringify(rows)).digest('hex');}return JSON.stringify(result);}
+ const before=await snapshot();const people=await admin.from('profiles').select('id,email').eq('role','associate').eq('active',true).eq('must_change_password',false).is('deleted_at',null);if(people.error||!people.data[0])throw Error('An eligible existing associate is required');const actor=people.data[0];
+ const link=await admin.auth.admin.generateLink({type:'magiclink',email:actor.email});if(link.error)throw link.error;
+ const client=createClient(url,process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});const login=await client.auth.verifyOtp({token_hash:link.data.properties.hashed_token,type:'email'});if(login.error)throw login.error;
+ const browser=await chromium.launch({channel:'chrome',headless:true});const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'allow'});const name='LIVE UI VERIFICATION '+randomUUID();
+ try{
+  const cookie='base64-'+Buffer.from(JSON.stringify(login.data.session)).toString('base64url');const prefix='sb-'+new URL(url).hostname.split('.')[0]+'-auth-token';const parts=cookie.match(/.{1,3000}/g)!;await context.addCookies(parts.map((value,i)=>({name:parts.length===1?prefix:prefix+'.'+i,value,domain:'127.0.0.1',path:'/',sameSite:'Lax' as const})));
+  const page=await context.newPage();await page.goto('http://127.0.0.1:3200/log/customer');await page.getByRole('textbox',{name:'Customer name',exact:true}).fill(name);await page.getByRole('button',{name:/^warm/i}).click();await page.getByText('Date & project',{exact:true}).click();const day=new Date();day.setDate(day.getDate()-2);await page.getByLabel('Meeting date',{exact:true}).fill(day.toISOString().slice(0,10));await page.getByRole('textbox',{name:'Remark',exact:true}).fill('Synthetic live offline remark; no real customer');await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
+  await context.setOffline(true);await page.reload();await expect(page.getByRole('textbox',{name:'Remark',exact:true})).toHaveValue('Synthetic live offline remark; no real customer');results.push('PASS: offline reload retained the typed remark');
+  await page.getByRole('button',{name:'Save update',exact:true}).click();await expect(page.getByText('1 pending sync · Retry')).toBeVisible();results.push('PASS: offline save visibly queued');await context.setOffline(false);
+  await expect.poll(async()=>{const r=await admin.from('leads').select('id').eq('owner_id',actor.id).eq('name',name).eq('is_historical',false).is('deleted_at',null);leadId=r.data?.[0]?.id;return r.data?.length??0;},{timeout:45000}).toBe(1);
+  const first=(await admin.from('interactions').select('id').eq('lead_id',leadId!).is('deleted_at',null).single()).data!;results.push('PASS: reconnect synced exactly one live nonhistorical meeting');
+  await page.goto('http://127.0.0.1:3200/log/customer?lead='+leadId);await page.getByRole('textbox',{name:'Remark',exact:true}).fill('Synthetic newer live follow-up');await page.getByRole('button',{name:'Save update',exact:true}).click();await expect(page.getByRole('heading',{name:'Saved. You’re all set.'})).toBeVisible({timeout:45000});results.push('PASS: online meeting form saved against live Supabase');
+  await page.getByRole('button',{name:'Undo',exact:true}).click();await expect.poll(async()=>{const r=await admin.from('interactions').select('id').eq('lead_id',leadId!).is('deleted_at',null);return r.data?.length;},{timeout:30000}).toBe(1);results.push('PASS: browser Undo removed the newer live follow-up');
+  await page.goto('http://127.0.0.1:3200/my-sheet?tab=interactions&row='+first.id);await page.getByRole('textbox',{name:'Remark for '+name,exact:true}).fill('Synthetic older live correction');await page.getByRole('button',{name:'Save row',exact:true}).click();
+  await expect.poll(async()=>{const r=await admin.from('audit_log').select('new_data').eq('row_id',first.id).eq('action','UPDATE');return r.data?.some(x=>x.new_data?.remark==='Synthetic older live correction')??false;},{timeout:30000}).toBe(true);results.push('PASS: older entry edited through My Sheet with an audit record');
+  await page.getByRole('button',{name:'Undo',exact:true}).click();await expect.poll(async()=>{const r=await admin.from('interactions').select('remark').eq('id',first.id).single();return r.data?.remark;},{timeout:30000}).toBe('Synthetic live offline remark; no real customer');results.push('PASS: browser Undo restored the older remark');
+ }finally{
+  if(!leadId){const r=await admin.from('leads').select('id').eq('owner_id',actor.id).eq('name',name).eq('is_historical',false).maybeSingle();leadId=r.data?.id;}
+  if(leadId){const a=await admin.from('interactions').update({deleted_at:new Date().toISOString()}).eq('lead_id',leadId).eq('is_historical',false);if(a.error)throw a.error;const b=await admin.from('leads').update({deleted_at:new Date().toISOString()}).eq('id',leadId).eq('owner_id',actor.id).eq('is_historical',false);if(b.error)throw b.error;results.push('PASS: synthetic test data soft-deleted from active lists');}
+  await context.close();await browser.close();await client.auth.signOut({scope:'local'});if(before!==await snapshot())throw Error('Historical row snapshot changed');results.push('PASS: every historical row remained unchanged');
+  console.log(results.join('\n'));writeFileSync('docs/ASSOCIATE_LIVE_BROWSER.md','# Live browser verification\n\n'+new Date().toISOString()+' · local production app, intended live Supabase, 390×844 phone viewport.\n\n'+results.map(x=>'- '+x).join('\n')+'\n');
+ }
+}
+main().catch(e=>{console.error('LIVE BROWSER FAILURE:',e.message);process.exitCode=1;});

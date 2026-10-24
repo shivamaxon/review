@@ -1,0 +1,1 @@
+export function csvCell(value:unknown):string{let text=value==null?'':Array.isArray(value)?value.join(' | '):typeof value==='object'?JSON.stringify(value):String(value);if(typeof value==='string'&&/^[=+\-@\t\r]/.test(text))text="'"+text;return /[",\r\n]/.test(text)?'"'+text.replaceAll('"','""')+'"':text;}

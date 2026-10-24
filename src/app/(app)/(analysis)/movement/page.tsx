@@ -1,0 +1,2 @@
+import {analysisData} from '@/lib/analysis/server';import {MovementView} from '@/components/analysis/reports';import {DrillDrawer,SetupPending} from '@/components/analysis/common';import type {Params} from '@/lib/analysis/shared';
+export default async function MovementPage({searchParams}:{searchParams:Promise<Params>}){const r=await analysisData('movement',await searchParams);return r.data?<><MovementView data={r.data} params={r.params}/><DrillDrawer data={r.drill} params={r.params}/></>:<SetupPending/>;}

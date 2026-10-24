@@ -1,0 +1,2 @@
+import {analysisData} from '@/lib/analysis/server';import {PlotReport} from '@/components/analysis/reports';import {SetupPending} from '@/components/analysis/common';import type {Params} from '@/lib/analysis/shared';
+export default async function PlotsPage({searchParams}:{searchParams:Promise<Params>}){const r=await analysisData('plots',await searchParams);return r.data?<PlotReport data={r.data} params={r.params}/>:<SetupPending/>;}

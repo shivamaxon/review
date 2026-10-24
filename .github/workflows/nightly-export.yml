@@ -1,0 +1,45 @@
+name: Nightly CSV backup
+
+# Exports every table to CSV and keeps it as a downloadable "artifact" on the run page for 14 days.
+# IMPORTANT: this repository must be PRIVATE. The CSVs contain customer names and phone numbers.
+on:
+  schedule:
+    - cron: "30 20 * * *"   # 20:30 UTC = 02:00 IST
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Export all tables to CSV
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/export-csv.mjs export
+      - name: Encrypt (only if you set the EXPORT_PASSPHRASE secret)
+        env:
+          EXPORT_PASSPHRASE: ${{ secrets.EXPORT_PASSPHRASE }}
+        run: |
+          if [ -n "$EXPORT_PASSPHRASE" ]; then
+            tar czf - export | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:EXPORT_PASSPHRASE -out backup.tar.gz.enc
+            rm -rf export
+            echo "Encrypted backup written."
+          else
+            echo "No EXPORT_PASSPHRASE secret set: uploading plain CSV files."
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: branch-review-backup-${{ github.run_id }}
+          path: |
+            export/
+            backup.tar.gz.enc
+          if-no-files-found: error
+          retention-days: 14

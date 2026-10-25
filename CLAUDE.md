@@ -284,3 +284,11 @@ These changes are saved locally and have not been committed/pushed or deployed a
 - `node --import tsx --env-file=.env.local scripts/create-admin-access.ts https://YOUR-APP.vercel.app [existing-admin-email]` creates a private local HTML launcher in ignored `export/admin-access.html`, mode 0600. Without an email it requires exactly one active admin. It checks the existing Auth UUID before minting, never emails anyone, never creates a user, and never prints the token. Keep the file private; generate a fresh one if expired/used. No tokens belong in Git or a public URL.
 - Normal sign-in logs only Supabase error code/status to server logs for diagnosis; invalid API-key errors get a hosting-configuration message. Credentials and tokens are never logged.
 - The owner reports running migrations 9 and 10; read-only live checks confirmed the new review snapshot/demo columns are present. No migration or customer data was changed by this access fix.
+
+
+### Confirmed hosted sign-in blocker (25 October 2026)
+
+- Target URL supplied by owner: `https://cpsales-dun.vercel.app`. Vercel builds succeed. Live proof validation succeeds, but the following profile read returns HTTP 401 because the hosting public API key is invalid.
+- Compared SHA-256 fingerprints only after a verified proof: hosted Supabase project matches local; hosted public key differs from the locally verified working anon key. Response reason is `hosting_public_key_invalid`. This is a confirmed hosting setting problem; do not reset user passwords or remove authentication to work around it.
+- Prepared ignored `export/vercel-public.env`, containing ONLY the working public URL and anon key, for the owner to update the matching Vercel project's Production/Preview environment. The service-role key is excluded. Updating hosting variables requires a fresh deployment. No Vercel management connection is available in this session, so the owner must change this setting.
+- Typecheck and changed-file lint passed. Targeted live checks: invalid proof denied PASS; direct Supabase admin proof/profile PASS; hosted admin access FAIL pending the public-key correction. No customer records or roles were changed. Do not claim admin entry is verified until the hosting setting is corrected and the browser reaches password setup/Command.

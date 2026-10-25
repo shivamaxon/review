@@ -11,18 +11,17 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
   const user = await verifiedUser(); // authoritative, shared only within this request
   if (!user) return null;
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, role, branch_id, designation, reports_to, active, must_change_password, branches(name)")
-    .eq("id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
+  const fields="id, full_name, email, role, branch_id, designation, reports_to, active, must_change_password, branches(name,is_demo)";
+  let response=await supabase.from("profiles").select(fields).eq("id",user.id).is("deleted_at",null).maybeSingle();
+  if(response.error&&['42703','PGRST204','PGRST200'].includes(response.error.code))response=await supabase.from("profiles").select(fields.replace('name,is_demo','name')).eq("id",user.id).is("deleted_at",null).maybeSingle();
+  const data=response.data;
   if (!data) return null;
-  const branch = data.branches as unknown as { name: string } | { name: string }[] | null;
+  const branch = data.branches as unknown as { name: string;is_demo?:boolean } | { name: string;is_demo?:boolean }[] | null;
   const { branches: _drop, ...rest } = data;
   void _drop;
   return {
     ...(rest as Omit<Profile, "branch_name">),
+    is_demo: Array.isArray(branch)?branch[0]?.is_demo===true:branch?.is_demo===true,
     branch_name: Array.isArray(branch) ? (branch[0]?.name ?? null) : (branch?.name ?? null),
   };
 });

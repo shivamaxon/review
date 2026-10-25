@@ -29,6 +29,8 @@ Host-agnostic: deployable to Netlify (recommended: its free plan allows commerci
 | `npm run seed` | Branch, projects, cold reasons, next-action types, review cycle, one demo user per role. Idempotent. `-- --no-demo` / `-- --remove-demo` |
 | `npm run db:bundle` | Rebuild `supabase/all_migrations.sql` (the paste-into-SQL-Editor file) after changing a migration |
 | `npm run load:history` / `npm run verify:history` | Load the flat workbook after seed-users; verify all 80 per-associate + total checks against reconciliation |
+| `npm run test:review` | Master-layout/phone-omission checks and actual isolated CSV recovery execution |
+| `npm run seed:demo` | Fictional presentation data in a separate, explicitly configured empty demo project only |
 | `npm run test:associate` / `npm run test:ui` | Parser/queue tests and phone Chrome tests against an isolated production build + local database |
 | `npm run test:history` | Actual workbook integration test in isolated PostgreSQL: idempotency, sheet caches, trigger rollback, quality actions + RLS |
 | `npm run seed:users` | Creates the real logins from the `users` sheet of `data/Axon_NCR_Review_Database_Import.xlsx`. Idempotent, `-- --dry-run` previews. Never prints passwords |
@@ -44,7 +46,11 @@ Host-agnostic: deployable to Netlify (recommended: its free plan allows commerci
 
 6. `…06_history.sql` — flat import columns, CP firms, historical flags, quality inbox + correction RPC, transactional service-only loader, reconciliation metrics, and dashboard history toggle.
 7. `…07_associate.sql` — atomic owner-only entry, idempotent receipts and offline cancellation markers, scoped audited history corrections, Undo, site/nurture/contact fields, Hot targets, scorecard, plot warnings and missing config choices. **Applied live.**
-8. `…08_analysis.sql` — SQL analysis dictionary/RPCs, security-invoker fact view, saved-view RLS and analysis indexes. **Local only: owner approval required before applying live or deploying.**
+8. `…08_analysis.sql` — SQL analysis dictionary/RPCs, security-invoker fact view, saved-view RLS and analysis indexes. **Present live, confirmed read-only on 25 October 2026; not applied by this task.**
+9. `…09_review.sql` — frozen per-associate review snapshots, published/completed/carried commitments, configurable rules, dated-entry locks, settings/targets/branches, audited correction/restore, reassignment, Master/rollup SQL and demo flag. **Local, unapplied.**
+10. `…10_privacy.sql` — protected customer phone/source/receipt columns, owner/admin record RPC, explicit analysis scope under finalisation, database password-setup gate and contact/ownership guards. **Local, unapplied.**
+
+Only migrations 9 → 10 remain pending and require owner approval. Migrations 1–8 remain unchanged. The owner authorised pushing the matching code to GitHub for the existing Vercel connection on 25 October 2026.
 
 Tables (all have `id uuid`, `created_by`, `created_at`, `updated_at`, `deleted_at` = soft delete):
 
@@ -78,22 +84,22 @@ Enum values are snake_case in the DB (`in_person`, `booking_done`, `walk_in`); s
 - Forms use server actions + `useActionState`. Mobile first: at least 48px tap targets (`min-h-12`), bottom tab bar on phones, `text-base` inputs (stops iOS zoom).
 - Fonts: Inter (Latin) + Noto Sans Devanagari with system fallbacks, so Hindi remarks render everywhere. Store text as UTF-8; FTS uses the `simple` config (no English stemming) so Hindi words are searchable.
 - Dashboard numbers: call the SQL functions, never recompute KPIs in TypeScript. If a definition must change: edit `docs/metrics.md` + a new migration + a test in `supabase/tests/rls.test.mjs`.
-- Migrations are append-only once shipped: add a new numbered file instead of editing an old one. Migrations 1–5 are fine to edit only until the first real deployment. After any change run `npm run test:db && npm run db:bundle`.
+- Migrations are append-only once applied: add a new numbered file instead of editing an applied one. Migrations 1–8 are already live; 9–10 remain local and await approval. After any change run `npm run test:db && npm run db:bundle`.
 - Comments explain *why*, in plain English. No new dependencies without a reason.
 
 ## Auth rules (all verified end-to-end against a real local Supabase)
 
 - Email + password only; **public sign-ups must be OFF** in Supabase (Authentication → Sign In / Providers → User Signups). Users exist only because an admin created them (Admin > Team, or `npm run seed:users`).
-- `must_change_password = true` on every new user. Enforced twice: `src/proxy.ts` redirects to `/change-password` (optimistic), and `requireProfile()` re-checks in every page. `signIn` redirects straight to `/change-password` or the role home in one hop (chained redirects leave the URL wrong).
+- `must_change_password = true` on every new user. Enforced by restrictive operational-data policies in migration 10 and by the UI: `src/proxy.ts` redirects to `/change-password` (optimistic), and `requireProfile()` re-checks in every page. `signIn` redirects straight to `/change-password` or the role home in one hop (chained redirects leave the URL wrong).
 - New password: 8+ chars; must not equal the email, email name, first name, full name, or `firstname123` (`src/app/change-password/actions.ts`).
-- Login rate limit: 5 failures per email or 20 per IP in 15 minutes → blocked (`login_attempts` table, service key only). Fails open if the table is missing, with a console error.
-- Starting passwords (from the owner): associates = lowercase first name (fallback `firstname123` when Supabase rejects it as too short); admin = their own email. Never stored in files or git. Seed scripts never print them.
+- Login rate limit: 5 failures per email or 20 per IP in 15 minutes → blocked (`login_attempts` table, service key only). Fails closed if the rate-limit store is unavailable, with a friendly retry message. Supabase also applies its own Auth limits.
+- Team creates random one-time passwords. Historical seed-user credentials came from earlier owner instructions and must be replaced privately before launch; never publish or print passwords. Public code must not contain actual credentials. New password setup is blocked from direct API bypass in migration 10.
 - The Excel `users` sheet lists reports_to = "Ajay Kushwaha (Branch Head)" but has **no row for Ajay**; `reports_to` stays empty until he is added, then re-run `npm run seed:users` to link.
 
 ## Ops
 
 - `.github/workflows/keepalive.yml` — pings `rpc/ping` every 3 days so the free Supabase project never pauses.
-- `.github/workflows/nightly-export.yml` — nightly CSV export as a workflow artifact (14 days). **Repo must be private.** Optional `EXPORT_PASSPHRASE` secret encrypts it.
+- `.github/workflows/nightly-export.yml` — nightly CSV export as a workflow artifact (14 days). **The job skips public repositories.** Use a separate private backup repository/vault; optional `EXPORT_PASSPHRASE` encrypts artifacts. Never publish customer CSVs. This local protection is not effective remotely until the code is pushed.
 - `.github/workflows/ci.yml` — typecheck, lint, RLS tests, build on every push.
 
 ## Known data issues from the Excel template (matter for the import, Prompt 2)
@@ -109,8 +115,8 @@ See `docs/excel-findings.md`.
 - [x] Prompt 3 implementation: mobile associate Today, customer/CP entry and detail, bookings, My Sheet/paste, drafts, offline queue/PWA, audited owner corrections and Undo.
 - [x] Migration 7 applied live; associate RPC verification 11 PASS and live phone-browser verification 9 PASS. Historical row fingerprints unchanged; synthetic nonhistorical test records soft-deleted. See docs/ASSOCIATE_LIVE_VERIFICATION.md and docs/ASSOCIATE_LIVE_BROWSER.md.
 - [x] Prompt 4 local implementation: full admin analysis screens, SQL measures/drills, URL filters, RLS scopes, comparison, Explorer/saved views/export. See docs/ANALYSIS.md.
-- [ ] Apply migration 8 and deploy only after the owner approves each action. No deployment performed in this session.
-- [ ] Later: review sessions/commitments and target-management UI.
+- [x] Prompt 5 local implementation: guided Review Mode, frozen snapshots, optional locks, Home commitments/completion/carry-forward, Master/PDF/CSV exports, settings/targets/branches/reassignment, audit/recycle, demo seed, friendly errors and recovery/production docs.
+- [ ] Apply migrations 9 → 10 only after owner approval. No production migration, data write, region change or deployment was performed for Prompt 5.
 
 
 ## Flat historical data (replaces the earlier importer prompt)
@@ -231,3 +237,41 @@ Read `docs/ANALYSIS.md` and the expanded `docs/metrics.md` before changing analy
 - New `scripts/analysis-workbook.test.ts` imports the full private workbook into isolated PostgreSQL and compares dashboard/drill results with the existing dictionary plus a strict 2-second SQL budget. Browser suite also checks the full workbook under 2 seconds, reviewer scopes, saved searches, exports and phone regressions. All fixtures are local; no production auth bypass exists.
 - Live verification used short-lived local-scope auth sessions with no email or password changes. An initial script used Supabase's default global sign-out before correction, so Udit may have needed to sign in again. The initial cleanup hit an expected version guard; targeted cleanup and all final checks passed. Details are in the live verification report.
 - Do not silently treat missing cancellation reasons, CP identities or inventory as known. Current source flags and audit remain available through Quality and record links.
+
+
+## Review Mode and finishing work (Prompt 5)
+
+Read `docs/REVIEW.md`, `docs/PRODUCTION.md`, README and `docs/metrics.md` before changing review logic. The latest code is local; do not assume migrations 8–10 are installed on live Supabase. Do not apply a migration, seed a project, change a region, reset live users or deploy without approval.
+
+- `/review` is a guided pack with target/actual/prior-cycle scorecards, movement/status-event changes, configured question links, earlier commitments, notes/actions, finalise/lock, focus view and a persistent associate walkthrough. `/review/print` prints one frozen session or current branch packs; `/api/review/export` returns the clean old-layout Master workbook. Source template inspected locally, never shipped. Exports retain SQL definitions, not contradictory old formulas, and leave customer phone cells empty.
+- `review_pack`, `review_targets`, `review_asks`, `review_master` and `branch_rollup` are SQL dictionary entries. Review comparison uses the actual configured cycle preceding the selected start; normal analysis comparisons keep their existing rules. Snapshot stores its metric dictionary version. Bookings/cancellations in Changes use status-history event dates; KPI/ask cancellation cohorts retain the documented booking-date/current-status basis.
+- `review_begin` shares an idempotent draft per associate/window. `review_edit` validates notes/action lengths, owner scope/branch and due date. `review_finalize` locks source tables, recomputes the pack once, freezes it, publishes commitments and records any entry lock atomically. Final sessions reject updates. New admin corrections never rewrite frozen evidence. `commitment_complete` permits the actual owner only and requires a comment. Carried actions link to the earlier item and mark it carried only when the new review finalises.
+- Review-entry lock trigger is independent of temporary append-only trigger suspension. It checks old and new dated entries, including edits, insertion, moving dates, soft deletion and Undo. Only admins/service recovery may bypass; normal later rating-before chain repair is permitted. No UI unlock/rewrite of final reviews exists.
+- Admin screens: Settings (company choices, branch cycles/rules, monthly targets, branch creation and CSV table links), Team (existing user management plus atomic lead reassignment), Audit (branch-scoped immutable before/after with filters), Recycle bin and per-record audited correction/restore. Reviewer teams retain access to non-contact customer context for their own historical fact credit after a transfer; other teams' facts stay hidden. New owner can read a leaver's old timeline; meeting/booking authorship is unchanged and inherited rows are read-only to that new owner.
+- Customer privacy is enforced at the database API, not just hidden in JSX. Direct authenticated SELECT of lead phone and source JSON/receipt payload columns is revoked; use `record_read` with scope and current-owner/admin masking. Associate workspace reads explicitly project only needed fields and own records/owned-lead history. Record detail and Quality use the same RPC. Do not reintroduce `select('*')` for protected customer tables. SQL metrics select only needed columns. Free-text remarks remain visible to permitted reviewers; use the dedicated contact field for phones.
+- Mandatory password setup gates operational tables through restrictive RLS. `my_role`/`my_branch` are unavailable until the flag is cleared. The user can read their own profile to reach setup; clearing the flag requires the server-only admin client **after** Auth confirms the user's password update. Do not restore browser-side profile flag updates. Public API queries with temporary passwords must not bypass this.
+- New restrictive policies use `(select my_role())` initplans to avoid repeated per-row role lookups. `analysis_rows` explicitly scopes associates even under a checked definer finalisation call. Do not weaken scope to improve speed. The existing Command <2s check stays strict.
+- Demo seed uses DEMO_SUPABASE_URL / DEMO_SUPABASE_SERVICE_ROLE_KEY / DEMO_PASSWORD and refuses the intended real hostname, configured real URL, non-demo branches and non-demo logins. It seeds only fictional data, CPs and transactions. Run it only in a separate project. UI banner identifies demo mode. Ordinary seed cannot silently put demo users into the intended live project.
+- `scripts/prepare-restore.ts` is an offline SQL generator, not an executor. It requires a complete compatible CSV export, produces private `export/recovery.sql`, and documents merge semantics, Auth UUID prerequisites, trigger restoration and audit preservation. It does not reconstruct Auth passwords/accounts or perform point-in-time recovery. Never execute a recovery file against live as a test.
+- Production guide covers Mumbai verification (not yet confirmed live), remaining 9–10 activation order, Netlify build/runtime setup and Vercel alternative. No paid service was purchased. Existing public GitHub visibility is unchanged. No new commit/push was requested for this finishing task.
+- Friendly error/loading/not-found screens, visible keyboard focus, reduced-motion CSS, labelled controls, 48px mobile controls and print CSS are included. Browser voice permissions and home-screen installation still require real-device checks.
+
+
+Final local validation for Prompt 5 (24 October 2026):
+
+- `npm run test:db`: 30 PASS, including full review lifecycle, immutable snapshots, CP/booking/customer/Undo locks, carry-forward/completion, role scope, draft-action removal, complete backup-service read grants, phone/source/receipt protection, original team credit after reassignment and mandatory-password API gating.
+- `npm run test:ui`: 16 PASS against an isolated production app/database; full review → frozen Master → print → Home commitment completion, all-associate walkthrough, settings/branch creation/audit/recycle, login throttle and all earlier phone/analysis scenarios. Full-workbook Command rendered in 745 ms locally; the strict two-second assertion was retained.
+- `npm run test:review`: 2 PASS; original Master cell/section positions, expansion past nine associates, omitted phones, and actual execution of the generated CSV merge-recovery SQL with audit/trigger checks.
+- `npm run test:associate`: 3 PASS. Actual-workbook historical integration: import twice, all 80 reconciliation checks, rollback, audited quality and preservation checks PASS in isolated PostgreSQL. No live verifier/import or production writes were run for Prompt 5.
+- Typecheck, lint and the final production build (`npm run build -- --webpack`) PASS. Migration bundle includes 10 migrations. Prior migrations 1–8 were not edited. Configured secret values were absent from source/public/browser chunks, and environment/workbook/export/build files remain ignored.
+- Initial issues found during testing were fixed: accessible picker labels, fixture users still behind the new password gate, mixed enum parameter typing, SQL alias ambiguity, login-test form reset/route-announcer selectors, and repeated per-row role lookups causing a 2.28-second render. New status-event tests also cover undated original bookings and multiple cancellations for one customer. No known automated test failures remain.
+
+These changes are saved locally and have not been committed/pushed or deployed as part of Prompt 5. Live activation, Mumbai-region confirmation, dedicated demo project provisioning and real-device microphone/PWA checks remain in the production checklist.
+
+
+## Owner-authorised account access and GitHub update (25 October 2026)
+
+- Read-only checks confirmed migration 8 analysis RPCs and saved views are already live on the intended project. Migrations 9 and 10 are absent; neither was applied.
+- At the owner’s request, reset temporary credentials for the 10 matched application/Auth accounts, require a password change on next login, and clear their failed-login attempts. All 10 active logins verified successfully. Active flags, roles and ownership were preserved; no unrelated Auth accounts or customer/business records were modified. Credential values and private reset scripts are excluded from Git. Do not repeat the reset automatically.
+- The owner authorised pushing all saved product updates to the existing GitHub repository for its connected Vercel app. Repository visibility is unchanged. Previous local test results above were not rerun for this push; only staged-file safety and targeted sign-in checks were performed.
+- Existing-live activation still requires approval for migration 9 followed by 10. Do not rerun migrations 1–8, recreate users or reload history.

@@ -1,7 +1,7 @@
 # Metric dictionary
 
 **Single source of truth.** Every number shown anywhere in the app comes from the SQL functions in
-`supabase/migrations/20260101000004_metrics.sql` and the history, associate and analysis additions in migrations 6–8. If this page and the SQL ever disagree, that is a bug.
+`supabase/migrations/20260101000004_metrics.sql` and the history, associate, analysis and review additions in migrations 6–10. If this page and the SQL ever disagree, that is a bug.
 The tests in `supabase/tests/rls.test.mjs` ("metric dictionary…") check these definitions with known data.
 
 A **period** is just a pair of dates (`from`, `to`, both inclusive). Review windows (1–10, 11–20, 21–month-end) are
@@ -157,3 +157,32 @@ All analysis RPCs are security invoker and require a reviewer. Base `analysis_ev
 Related facts obey global filters. Dimension filters and the text query select the input cohort; related booking facts are then linked to that cohort, rather than reapplying a meeting rating to booking status. Group measures are not generally additive: one customer/CP can belong to several rating/week/mode groups. The total is recomputed from the complete cohort, never summed from rendered groups. Group sorting and pagination happen after SQL computes all groups. Heat scales are SQL values; browser code only renders them. CSV/XLSX exports request the same RPCs and paginate through all matching records.
 
 Full-text search uses PostgreSQL `simple` configuration and websearch syntax. It searches remarks in the selected records; lead search also matches its interaction remarks. An older matching remark may qualify a lead even when its latest displayed remark differs. Query and filters are stored in the URL/saved view. Saved views store no metric results and do not bypass RLS.
+
+
+## Review Mode, targets and frozen reports (migrations 9–10)
+
+`review_pack` assembles SQL measures; `review_targets` prorates the four monthly targets by inclusive calendar-day overlap and rounds up after summing each person's monthly contributions. Missing targets stay NULL. The scorecard compares the selected review window with the **configured review cycle immediately before its start**, using `analysis_context` with `review_previous_cycle=true`. Normal analysis comparison semantics remain unchanged. Each branch uses its own cycle. The review date range is at most one year.
+
+What changed starts the day after the most recent final review ending before the selected window, or at this window's beginning if none exists. Movement follows recorded interaction and booking-status history. New Hot means the first-ever Hot meeting in the selected change span (a latest-meeting Hot representative with no earlier Hot meeting). New booking/cancellation lists use per-booking status-history events within that span before same-lead stage collapse, preserving multiple plots per customer, including a later cancellation of an older booking. Undated initial statuses cannot be assigned invented event dates. Current-status booking KPIs remain separate from status-event lists; a cancellation event can refer to a booking that subsequently reopened.
+
+`review_asks` evaluates the branch's enabled rules as of min(period end, today), using the visible as-of pipeline and recorded events:
+
+| Rule | Default / definition |
+|---|---|
+| `hot_stale` | Hot and last interaction at least 5 days ago; unknown last touch also needs investigation |
+| `hot_no_plot` | Hot with no known plot list |
+| `overdue` | Next-action date before the snapshot date |
+| `warm_stale` | Warm with no stage change for at least 21 days; same-rating contacts do not reset movement age |
+| `cold_future` | Cold with next-action date after the snapshot date; a question to confirm nurturing intent, not a blocker |
+| `token_stale` | Current Token with known booking date at least 10 days old |
+| `cancellations` | Current cancelled bookings dated in the selected window, showing reason or Reason not recorded |
+| `cp_no_leads` | Latest personal CP rating Hot/Active with no individually CP-linked leads created in the preceding 30 days within that reviewer's scope |
+| `double_hot` | A current Hot lead shares a case/trim-normalised plot in the same project with another visible Hot customer |
+
+Admins can enable/disable every rule and edit day thresholds for the four age rules. These are review questions, not invented deductions or automatic rating changes. Team leads only receive questions supported by their permitted scope. The ask list's dated cancellations differ from the change list's status events, as labelled above. Unknown token dates stay a quality issue, not a guessed 10-day age.
+
+`review_finalize` freezes the complete pack, original metric-row definitions (`legacy_stats`), targets, notes, agreed actions and dated detail rows in `review_sessions.snapshot`. Export and print of that session read the frozen snapshot, never recompute it. The schema migration and `docs/metrics.md` define its metric basis at finalisation. Later corrections, ownership changes, commitment completions and new metric definitions cannot change its historical figures. New actions publish on finalisation; future completion is operational state recorded separately in `review_actions`, with audit.
+
+`review_master` provides SQL totals, Hot %, booking-target variance and achievement. The old Master layout and per-associate sections are retained; old conflicting row-count/Booking Done-only formulas are not reproduced. Ratings use latest meeting per lead and confirmations include Agreement Signed. CP summary totals sum the individual distinct-CP counts, matching the old per-associate Master concept; Command's branch-wide active CP count deduplicates across associates. Targets sum the per-person allocated targets. Phones are deliberately omitted. A finalised-session export includes one person's frozen pack; a whole-branch current export uses live SQL at its chosen window.
+
+Reassigning a leaver's active leads changes current ownership only. Meeting/booking attribution remains with its original associate and the existing active-owner metric dictionary still governs current dashboards. The new owner can read prior events and add their own follow-ups; inherited entries cannot be edited as if newly authored by them. Deactivation may change live active-associate dashboard scope; finalised reviews preserve the reviewed figures.

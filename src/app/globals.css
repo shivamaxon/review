@@ -156,3 +156,19 @@
 @media(max-width:767px) { .analysis-input,.analysis-button { min-height:48px; } }
 
 }
+
+/* Visible keyboard focus and a compact review pack for print/PDF. */
+:focus-visible { outline:3px solid #0f766e; outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; } }
+.review-focus > div > header, .review-focus nav[aria-label="Main"] { display:none; }
+@media print {
+ @page { size:A4; margin:14mm; }
+ body { font-size:11px; background:white !important; color:black !important; }
+ header.sticky,nav[aria-label="Main"],.print\:hidden,button { display:none !important; }
+ main { max-width:none !important; padding:0 !important; }
+ .review-print-person ~ .review-print-person { break-before:page; }
+ .analysis-panel { break-inside:avoid; box-shadow:none; padding:12px; }
+ .review-pack a { color:black; text-decoration:none; }
+ .review-pack .grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .review-pack h1 { font-size:22px; }
+}

@@ -1,0 +1,38 @@
+# Review Mode implementation
+
+The full review path is implemented locally. Migration 8 is confirmed present live as of 25 October 2026. Migrations 9 and 10 remain unapplied and require owner approval. Review Mode implementation did not modify live data; the subsequent owner-authorised credential reset affected only account access and security logs.
+
+Migration 9 extends `review_sessions` with associate ID, frozen JSON snapshot, finalisation time and optional entry locking; extends `review_actions` with publication time, completion comment and carry-forward link; adds branch-scoped `review_rules` and the demo branch flag. Checked RPCs begin/edit/finalise reviews, complete commitments, manage settings, correct/remove/restore records, reassign customers and produce branch/Master reports. Existing session/action browser writes are revoked. Drafts are unique per associate/window, finalisation is idempotent, frozen sessions reject even direct updates and table locks serialize finalisation with entry writes.
+
+Review packs contain the SQL scorecard, prorated targets, actual prior review-cycle comparison, transition history, first-ever Hot leads in the window, booking/cancellation status events since the earlier review period, configured questions, earlier commitments and frozen detail rows for exports. If no earlier review exists, changes start at the selected period’s beginning. The prior review is the most recent final review ending before this window. Pipeline/ask-list state is as of min(window end,today); booking status and classification attributes use the documented current-status semantics. Notes/actions must be saved before Finalise. Mistaken draft actions can be removed before finalising, with audit. Draft actions publish atomically with the final snapshot. Carry-forward marks an earlier open action Carried over only on finalisation; the new action appears on its owner’s Home. Completion requires the actual owner and a comment.
+
+A separate lock trigger on interactions, CP interactions and bookings survives the associate RPC’s temporary append-only guard suspension. It checks both old and new dates, blocking edits, soft-deletion, Undo, backdating and insertion inside locked windows for non-admins. Derived rating-before repair alone is allowed so later work can maintain its chain. Admin corrections use `admin_record`, retain audit and do not change final snapshots. Finalisation does not change imported metrics or silently complete any work.
+
+Migration 10 removes direct authenticated SELECT access to structured customer phones, original source JSON and sensitive receipt payloads. Column grants keep SQL analysis working. `record_read` performs explicit scope and current-owner/admin checks for protected fields. New owners can read a transferred lead’s old interactions/bookings while authorship is retained; inherited rows are read-only in My Sheet. Mandatory password setup is enforced through restrictive database policies as well as UI redirects. Only a checked server action can clear the setup flag after Auth confirms a successful password change. Login limits now fail closed on a rate-store outage.
+
+The Master generator was built after inspecting the original workbook at `~/Downloads/NCR_Channel_10Day_Review_Template.xlsx`; that workbook is never shipped. It reproduces Master sections A–D, the per-associate column order, row positions for the original nine-person layout and dynamic expansion for more associates; each person has the three original data sections. It generates clean values instead of broken INDIRECT references. Metric values, ratios and targets come from SQL; browser/export code only maps cells and formats numbers. It preserves the layout rather than reproducing old inconsistent formulas. Phone cells are blank. Finalised session exports use only saved snapshot data; non-final branch exports are live period reports. Print packs use normal browser Print/Save PDF; no paid PDF service is needed. CSV routes are role-checked, scoped, paginated and protect formula-like text.
+
+The public repository’s nightly backup workflow now skips public repositories. The offline CSV recovery generator writes sensitive SQL under ignored `export/` and never connects to any database. An isolated recovery test actually executes the generated SQL and checks restored records, audit retention and enabled triggers. It is merge recovery, not Auth reconstruction or a point-in-time database restore.
+
+Presentation demo seeding requires a separate project, explicit DEMO environment variables and only fictional users/data. It refuses the configured real URL, the intended production hostname and non-demo branches/users. The app shows a persistent demo banner. No production auth bypass is added.
+
+## Plain-English test checklist
+
+- [ ] In a staging/demo project, open Review, pick an associate/window and read the scorecard versus target and previous cycle.
+- [ ] Open each applicable question; confirm it reaches the intended customer, CP or booking. Change a rule’s threshold or disable it in Settings, then start/refresh an unfinalised pack.
+- [ ] Review the moved-up/down, new Hot, bookings and cancellation lists. Check whether a missing date/reason is a source-quality issue rather than an invented fact.
+- [ ] Add a note and an action with owner/due date; save. The associate must not see the draft action yet.
+- [ ] Finalise with locking. Reload: the final snapshot and agreed notes/actions are unchanged. Repeat Finalise safely without duplication.
+- [ ] Sign in as the owner; Today shows the commitment. Add a completion comment and Mark done. Other associates cannot complete it.
+- [ ] Carry an earlier open commitment into a new review and finalise. The old item becomes Carried over, the new item remains actionable.
+- [ ] Try an older meeting edit, CP edit, booking edit, Undo and backdated new entry inside the locked window as an associate: all are refused. Fresh entries outside it still work.
+- [ ] As admin, make an audited correction and soft-delete/restore a test record. The finalised review snapshot and its Master export must stay unchanged.
+- [ ] Download Master Excel; check its old sections and associate tabs. Customer phone cells are empty. Print one pack and the whole branch to PDF; navigation/buttons must be absent.
+- [ ] Walk through everyone: completing a review offers the next associate and retains walkthrough mode through the last person.
+- [ ] Add a branch, its people and monthly targets; compare branches as super admin. Team leads and branch admins must not access outside their scope.
+- [ ] Reassign a test leaver’s leads. New owner sees the old timeline and contact; original authors remain unchanged. Former author cannot retrieve transferred contact JSON. Team leads see analysis but not customer phone fields.
+- [ ] Sign in using a new temporary password: only password setup is available, including through the database API. After choosing a strong password, normal access works. Repeated failed logins are throttled.
+- [ ] Check keyboard focus, labelled controls, mobile tap targets, screen-reader status messages, reduced-motion behavior and actual phone microphone/PWA installation.
+- [ ] Rehearse backup merge recovery in an isolated database; never use a production restore as a test.
+
+Automated evidence: 30 database/security tests, 16 production-browser scenarios, two Master/recovery artifact tests, three associate parser/queue tests, and the actual-workbook import/reconciliation regression pass locally. Typecheck, lint and the production build also PASS. Live activation still requires approval for the migrations and deployment separately.

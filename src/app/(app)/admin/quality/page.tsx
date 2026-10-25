@@ -33,7 +33,7 @@ export default async function QualityPage({ searchParams }: {
         const ids = [...new Set((issues ?? []).filter(q => q.table_name === table).flatMap(q => q.record_ids as string[]))];
         if (!ids.length)
             continue;
-        const res = await db.from(table).select('*').in('id', ids);
+        const res = await db.rpc('record_read',{p_table:table,p_ids:ids,p_include_deleted:true});
         if (res.error)
             throw res.error;
         for (const r of res.data ?? [])

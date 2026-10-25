@@ -18,6 +18,7 @@ export type Profile = {
   active: boolean;
   must_change_password: boolean;
   branch_name: string | null;
+  is_demo?:boolean;
 };
 
 /** Where each role lands after login. */

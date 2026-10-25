@@ -348,7 +348,7 @@ test('login_attempts is invisible to every browser role', async () => {
 test('historical dictionary counts rows, unknown ratings/dates and booking_done; dashboard history toggle respects RLS', async () => {
   const M = '20000000-0000-0000-0000-00000000d001';
   await t.admin('insert into auth.users(id) values($1)',[M]);
-  await t.admin("insert into profiles(id,branch_id,full_name,role,legacy_key) values($1,$2,'History test','associate','history_test')",[M,B1]);
+  await t.admin("insert into profiles(id,branch_id,full_name,role,legacy_key,must_change_password) values($1,$2,'History test','associate','history_test',false)",[M,B1]);
   const [lead] = await t.admin("insert into leads(name,owner_id,is_historical) values('History metric lead',$1,true) returning id", [M]);
   for (const rating of ['hot', 'warm', null]) {
     await t.admin("insert into interactions(lead_id,associate_id,occurred_on,rating_after,is_historical) values($1,$2,'2026-06-01',$3,true)", [lead.id, M, rating]);
@@ -431,7 +431,7 @@ test('associate atomic entry, duplicate guard, audited old edits, retry-safe syn
     await d.as(me,'select associate_undo($1)',[undoReq]);
     await d.as(me,'select associate_undo($1)',[undoReq]);
     assert.ok((await d.admin('select deleted_at from leads where id=$1',[disposable.lead_id]))[0].deleted_at);
-    assert.equal((await d.as(other,'select * from entry_receipts')).length,0);
+    assert.equal((await d.as(other,'select id from entry_receipts')).length,0);
     assert.equal((await d.admin("select count(*)::int n from pg_trigger where not tgisinternal and tgenabled='D'"))[0].n,0);
     await d.admin('insert into targets(branch_id,associate_id,month,customer_meetings,hot_leads,cp_meetings,bookings) values($1,$2,$3,31,31,31,31)',[b.id,me,'2026-10-01']);
     const [score]=await d.as(me,"select associate_scorecard('2026-10-21','2026-10-31') value");

@@ -1,4 +1,5 @@
 "use server";
+import {createAdminClient} from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
@@ -10,7 +11,7 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  if (password.length < 8) return { error: "Use at least 8 characters." };
+  if (password.length < 8 || password.length>1024) return { error: "Use at least 8 characters." };
   if (password !== confirm) return { error: "The two passwords don't match." };
   if (/^(password|12345678|qwerty)/i.test(password)) return { error: "That password is too easy to guess." };
 
@@ -25,8 +26,9 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: error.message };
 
-  // A user is allowed to switch this flag OFF for themselves (the database blocks switching it on).
-  const { error: flagError } = await supabase
+  // Only after Auth confirms the password change can the checked server action
+  // clear the gate. Direct browser writes cannot clear it.
+  const { error: flagError } = await createAdminClient()
     .from("profiles")
     .update({ must_change_password: false })
     .eq("id", profile.id);

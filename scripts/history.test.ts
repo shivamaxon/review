@@ -11,7 +11,7 @@ test('real flat workbook: load twice, preserve sheet state, verify SQL metrics a
         const [branch] = await admin("insert into branches(name) values('Delhi NCR') returning id");
         for (const r of sheet(await readWorkbook(), 'users')) {
             const [user] = await admin('insert into auth.users(id,email) values(gen_random_uuid(),$1) returning id', [r.email]);
-            await admin('insert into profiles(id,branch_id,full_name,role,legacy_key) values($1,$2,$3,$4,$5)', [user.id, branch.id, r.full_name, r.role, r.user_key]);
+            await admin('insert into profiles(id,branch_id,full_name,role,legacy_key,must_change_password) values($1,$2,$3,$4,$5,false)', [user.id, branch.id, r.full_name, r.role, r.user_key]);
         }
         // Model the seed-created project before import.
         await admin("insert into projects(name) values('Kudal')");
@@ -66,7 +66,7 @@ test('real flat workbook: load twice, preserve sheet state, verify SQL metrics a
         await assert.rejects(as(associate.id, "update interactions set remark='attempt' where id=$1", [correctable.record_ids[0]]), /append-only/);
         const [other] = await admin("insert into branches(name) values('Other branch') returning id");
         const [otherUser] = await admin('insert into auth.users(id) values(gen_random_uuid()) returning id');
-        await admin("insert into profiles(id,branch_id,full_name,role) values($1,$2,'Other admin','branch_admin')", [otherUser.id, other.id]);
+        await admin("insert into profiles(id,branch_id,full_name,role,must_change_password) values($1,$2,'Other admin','branch_admin',false)", [otherUser.id, other.id]);
         await assert.rejects(as(otherUser.id, 'select resolve_quality_issue($1,$2)', [issue.id, 'ok']), /not accessible/);
         const [second] = await admin("select * from data_quality_issues where issue_type='plot_double_booked' and status='open' order by legacy_key limit 1");
         await as(owner.id, 'select resolve_quality_issue($1,$2)', [second.id, 'keep_b']);

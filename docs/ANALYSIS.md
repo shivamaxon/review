@@ -1,15 +1,12 @@
 # Admin analysis
 
-The analysis layer is built and tested locally. **Migration 8 has not been applied to the live project, and this code has not been deployed.** Migration 7 is installed and its associate flows passed live verification. Do not apply migration 8 or deploy without the owner's approval.
+The analysis layer is built and tested locally. **Migration 8 is already installed in the intended live project**, confirmed by read-only checks on 25 October 2026. Do not rerun it. The newer Review Mode and privacy features require migrations 9 and 10, which still await owner approval.
 
-## Activate after approval
+## Existing-project activation
 
-1. In the intended Supabase project (`jxduyylphokqpignybpz`), open SQL Editor → New query.
-2. Paste only `supabase/migrations/20260101000008_analysis.sql` and click Run once. Migrations 1–7 must already exist. Do not rerun the full bundle on the existing project.
-3. Restart the local app to review, or publish only after deployment is also approved. No reload of historical data or recreation of users is needed.
-4. Sign in as an admin. Open Command, turn on Compare previous period and select a window containing your data. A new window with no activity will correctly show zero.
-
-Until the new RPCs exist, analysis screens display a setup-pending message. Today and existing associate forms remain available.
+1. Keep migration 8 as installed; do not rerun the fresh-install bundle, recreate users or reload history.
+2. For the matching latest app, follow [the production checklist](PRODUCTION.md) and obtain approval for migration 9 followed by 10.
+3. Sign in as an admin. Open Command, turn on Compare previous period and select a window containing your data. A new window with no activity will correctly show zero.
 
 ## Answer the four review questions
 
@@ -40,10 +37,10 @@ Unknown dates are preserved and excluded from date-window metrics; unknown booki
 
 - All 80 read-only live historical reconciliation checks PASS after associate verification; full associate-by-associate results: `docs/HISTORY_RECONCILIATION.md`.
 - Live associate RPC checks: 11 PASS. Live phone-browser checks: 9 PASS. Reports: `docs/ASSOCIATE_LIVE_VERIFICATION.md`, `docs/ASSOCIATE_LIVE_BROWSER.md`.
-- Isolated database suite: 28 PASS, including reviewer scope, all-branch filtering, dictionary agreement, exact metric/funnel/Explorer member rows, saved-view RLS, movement and plot comparisons.
+- Isolated database suite: 30 PASS after Review Mode hardening, including reviewer scope, all-branch filtering, dictionary agreement, exact metric/funnel/Explorer member rows, saved-view RLS, movement and plot comparisons.
 - Actual workbook isolated import: loaded twice, all reconciliation checks PASS, audited quality actions and rollback verified.
-- Actual workbook Command SQL matches the existing dictionary; SQL and browser render both under 2 seconds on this machine. Latest production-browser run: 1.684 seconds, including visible booking charts. This is local evidence, not a guarantee of live network latency; remeasure after approved migration/deployment.
-- All 12 browser scenarios PASS; the final focused full-workbook desktop check also PASS. Typecheck, lint and the production build PASS.
+- Actual workbook Command SQL matches the existing dictionary; SQL and browser render both under 2 seconds on this machine. After the Review Mode hardening, the full-workbook production-browser check completed in 0.745 seconds locally, including visible booking charts. This is local evidence, not a guarantee of live network latency; remeasure after approved migration/deployment.
+- All 16 browser scenarios PASS after Review Mode was added, including the full-workbook desktop timing check. Typecheck, lint and the production build PASS.
 - Browser suite covers admin navigation, all four business questions, exports, full-text saved views, role visibility, source-volume render and associate/offline regressions.
 
 Initial failures were corrected: an expensive per-person SQL scan (22.5 seconds), an unnecessary global dimension scan (browser 2.126 seconds), and selectors that picked hidden/mobile controls or two interactions with the same customer name. Final tests exercise the actual behavior, without relaxing the two-second limit.

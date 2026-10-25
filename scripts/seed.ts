@@ -133,6 +133,7 @@ async function removeDemoUsers() {
 async function main() {
   const args = new Set(process.argv.slice(2));
   if (args.has("--remove-demo")) return removeDemoUsers();
+  if(!args.has('--no-demo')&&new URL(url!).hostname==='jxduyylphokqpignybpz.supabase.co')throw new Error('Use --no-demo for reference data here. Presentation data belongs in a separate project with npm run seed:demo.');
   const branchId = await ensureBranch();
   await seedReference(branchId);
   if (!args.has("--no-demo")) await seedDemoUsers(branchId);

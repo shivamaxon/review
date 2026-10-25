@@ -22,8 +22,8 @@ async function clientIp(): Promise<string> {
   );
 }
 
-/** Returns true if this email or IP has failed too often recently. On a database error it lets the login through (and logs). */
-async function isLockedOut(email: string, ip: string): Promise<boolean> {
+/** Fail closed when the shared rate-limit store is unavailable. */
+async function isLockedOut(email: string, ip: string): Promise<"allowed" | "blocked" | "unavailable"> {
   try {
     const admin = createAdminClient();
     const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
@@ -32,10 +32,10 @@ async function isLockedOut(email: string, ip: string): Promise<boolean> {
       admin.from("login_attempts").select("id", { count: "exact", head: true }).eq("ip", ip).eq("succeeded", false).gte("at", since),
     ]);
     if (byEmail.error || byIp.error) throw byEmail.error ?? byIp.error;
-    return (byEmail.count ?? 0) >= MAX_FAILURES_PER_EMAIL || (byIp.count ?? 0) >= MAX_FAILURES_PER_IP;
+    return (byEmail.count ?? 0) >= MAX_FAILURES_PER_EMAIL || (byIp.count ?? 0) >= MAX_FAILURES_PER_IP ? "blocked" : "allowed";
   } catch (e) {
     console.error("login rate-limit check failed (migration 5 applied?):", e);
-    return false;
+    return "unavailable";
   }
 }
 
@@ -56,10 +56,12 @@ async function recordAttempt(email: string, ip: string, succeeded: boolean) {
 export async function signIn(_prev: FormState, formData: FormData): Promise<FormState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  if (!email || !password) return { error: "Enter your email and password." };
+  if (!email || email.length>254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password || password.length>1024) return { error: "Enter your email and password." };
 
   const ip = await clientIp();
-  if (await isLockedOut(email, ip)) {
+  const limit=await isLockedOut(email,ip);
+  if(limit==="unavailable")return {error:"Sign-in checks are temporarily unavailable. Please try again shortly."};
+  if (limit==="blocked") {
     return { error: `Too many wrong attempts. Please wait ${WINDOW_MINUTES} minutes and try again, or ask your branch admin to reset your password.` };
   }
 

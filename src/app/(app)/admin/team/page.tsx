@@ -1,3 +1,5 @@
+import {ReassignForm} from "@/components/review/admin-forms";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -34,7 +36,7 @@ export default async function TeamPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Team</h1><Link className="touch-button underline" href="/admin/settings">Targets, rules, branches & settings →</Link>
         <p className="text-sm text-muted-foreground">Create logins for your people. No emails are sent: you hand over the temporary password yourself.</p>
       </div>
 
@@ -48,7 +50,7 @@ export default async function TeamPage() {
         </CardContent>
       </Card>
 
-      <section aria-label="Team members" className="space-y-3">
+      <ReassignForm people={people}/><section aria-label="Team members" className="space-y-3">
         <h2 className="text-lg font-medium">People ({people.length})</h2>
         {people.map((p) => (
           <Card key={p.id} size="sm">

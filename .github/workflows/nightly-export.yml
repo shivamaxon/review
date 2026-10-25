@@ -1,7 +1,7 @@
 name: Nightly CSV backup
 
 # Exports every table to CSV and keeps it as a downloadable "artifact" on the run page for 14 days.
-# IMPORTANT: this repository must be PRIVATE. The CSVs contain customer names and phone numbers.
+# Never export customer data as a public-repository artifact. This job runs only in private repositories.
 on:
   schedule:
     - cron: "30 20 * * *"   # 20:30 UTC = 02:00 IST
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   export:
+    if: github.event.repository.private
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

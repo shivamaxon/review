@@ -50,7 +50,7 @@ async function reset() {
     await db.admin("insert into targets(branch_id,associate_id,month,customer_meetings,hot_leads,cp_meetings,bookings) values($1,$2,date_trunc('month',current_date),10,5,8,2)", [BRANCH, ME]);
 }
 await reset();
-const tables = new Set(['profiles', 'branches', 'leads', 'projects', 'interactions', 'channel_partners', 'cp_interactions', 'bookings', 'next_action_types', 'cold_reasons', 'review_actions', 'data_quality_issues', 'login_attempts','saved_analysis_views']);
+const tables = new Set(['profiles', 'branches', 'leads', 'projects', 'interactions', 'channel_partners', 'cp_interactions', 'bookings', 'next_action_types', 'cold_reasons', 'review_actions', 'data_quality_issues', 'login_attempts','saved_analysis_views','review_sessions','review_rules','targets','review_cycle','audit_log','cp_firms']);
 const identifier = (s: string) => { if (!/^[a-z_][a-z0-9_]*$/.test(s))
     throw new Error('Invalid identifier'); return '"' + s + '"'; };
 const server = createServer((req, res) => {
@@ -95,7 +95,7 @@ const server = createServer((req, res) => {
                 return;
             }
             if (url.pathname === '/__test/state') {
-                json({ interactions: await db.admin('select * from interactions where deleted_at is null'), leads: await db.admin('select * from leads where deleted_at is null'), receipts: await db.admin('select * from entry_receipts'), audit: await db.admin("select table_name,action from audit_log where action='UPDATE'") });
+                json({ loginAttempts:await db.admin('select id from login_attempts'),interactions: await db.admin('select * from interactions where deleted_at is null'), leads: await db.admin('select * from leads where deleted_at is null'), receipts: await db.admin('select * from entry_receipts'), audit: await db.admin("select table_name,action from audit_log where action='UPDATE'") });
                 return;
             }
             if (url.pathname === '/auth/v1/user') {
@@ -115,7 +115,7 @@ const server = createServer((req, res) => {
                 const definitions: Record<string, {
                     args: string[];
                     scalar?: boolean;
-                }> = { current_review_period: { args: ['p_on'] }, associate_scorecard: { args: ['p_from', 'p_to'], scalar: true }, associate_save: { args: ['p_kind', 'p_payload', 'p_request_id'], scalar: true }, associate_undo: { args: ['p_request_id'], scalar: true }, plot_conflicts: { args: ['p_project', 'p_plot', 'p_lead'] },analysis_options:{args:[],scalar:true},analysis_dashboard:{args:['p_filters'],scalar:true},analysis_movement:{args:['p_filters'],scalar:true},analysis_cps:{args:['p_filters'],scalar:true},analysis_plots:{args:['p_filters'],scalar:true},analysis_drill:{args:['p_metric','p_filters','p_offset','p_limit','p_basis'],scalar:true},analysis_explore:{args:['p_dataset','p_filters','p_groups','p_measures','p_offset','p_limit','p_sort'],scalar:true} };
+                }> = { current_review_period: { args: ['p_on'] }, associate_scorecard: { args: ['p_from', 'p_to'], scalar: true }, associate_save: { args: ['p_kind', 'p_payload', 'p_request_id'], scalar: true }, associate_undo: { args: ['p_request_id'], scalar: true }, plot_conflicts: { args: ['p_project', 'p_plot', 'p_lead'] },analysis_options:{args:['p_dimensions'],scalar:true},analysis_context:{args:['p_filters'],scalar:true},record_read:{args:['p_table','p_ids','p_owner','p_offset','p_limit','p_include_deleted'],scalar:true},review_begin:{args:['p_associate','p_from','p_to'],scalar:true},review_pack:{args:['p_associate','p_filters'],scalar:true},review_edit:{args:['p_session','p_summary','p_action','p_owner','p_due','p_carry','p_remove'],scalar:true},review_finalize:{args:['p_session','p_lock'],scalar:true},commitment_complete:{args:['p_id','p_comment'],scalar:true},review_master:{args:['p_filters','p_session'],scalar:true},admin_settings:{args:['p_kind','p_data'],scalar:true},admin_record:{args:['p_table','p_id','p_patch','p_deleted'],scalar:true},branch_rollup:{args:['p_filters'],scalar:true},admin_reassign:{args:['p_from','p_to'],scalar:true},analysis_dashboard:{args:['p_filters'],scalar:true},analysis_movement:{args:['p_filters'],scalar:true},analysis_cps:{args:['p_filters'],scalar:true},analysis_plots:{args:['p_filters'],scalar:true},analysis_drill:{args:['p_metric','p_filters','p_offset','p_limit','p_basis'],scalar:true},analysis_explore:{args:['p_dataset','p_filters','p_groups','p_measures','p_offset','p_limit','p_sort'],scalar:true} };
                 const spec = definitions[name];
                 if (!spec) {
                     json({ code: 'PGRST202', message: 'Unknown fixture function' }, 404);
@@ -188,14 +188,15 @@ const server = createServer((req, res) => {
             const order = url.searchParams.get('order');
             const ordering = order ? ' order by ' + order.split(',').map(x => { const [c, dir] = x.split('.'); return identifier(c) + (dir === 'desc' ? ' desc' : ' asc'); }).join(',') : '';
             const offset = Number(url.searchParams.get('offset') ?? 0), limit = Math.min(Number(url.searchParams.get('limit') ?? 1000), 10000);
-            const result = await query(`select * from public.${identifier(table)}${where}${ordering} limit ${limit} offset ${offset}`, params);
+            const selection=(url.searchParams.get('select')??'*').replace(/branches\([^)]*\)/g,'');const projection=selection.includes('*')?'*':selection.split(',').map(s=>s.trim()).filter(Boolean).map(identifier).join(',')||'id';
+            const result = await query(`select ${projection} from public.${identifier(table)}${where}${ordering} limit ${limit} offset ${offset}`, params);
             for (const row of result)
                 for (const key of Object.keys(row))
-                    if ((key.endsWith('_date') || key.endsWith('_on')) && row[key] instanceof Date)
+                    if ((key.endsWith('_date') || key.endsWith('_on') || ['period_start','period_end','month'].includes(key)) && row[key] instanceof Date)
                         row[key] = row[key].toISOString().slice(0, 10);
-            if (table === 'profiles' && url.searchParams.get('select')?.includes('branches(name)'))
+            if (table === 'profiles' && url.searchParams.get('select')?.includes('branches('))
                 for (const row of result)
-                    row.branches = (await query('select name from branches where id=$1', [row.branch_id]))[0];
+                    row.branches = (await query('select name,is_demo from branches where id=$1', [row.branch_id]))[0];
             res.setHeader('Content-Range', `0-${Math.max(result.length - 1, 0)}/${result.length}`);
             json(req.headers.accept?.includes('vnd.pgrst.object') ? (result[0] ?? null) : result);
         }

@@ -10,6 +10,7 @@ export const loadAssociateData = cache(async (): Promise<Bundle> => {
     async function all(table: string, columns: string, ownerField?: string): Promise<Record<string, unknown>[]> {
         const rows = [];
         for (let offset = 0;; offset += 1000) {
+            if(['leads','interactions','bookings'].includes(table)){const r=await db.rpc('record_read',{p_table:table,p_owner:profile.id,p_offset:offset,p_limit:1000});if(r.error)throw new Error(r.error.message);rows.push(...r.data.map((item:Record<string,unknown>)=>Object.fromEntries(columns.split(',').map(k=>[k,item[k]]))));if(r.data.length<1000)break;continue;}
             let q = db.from(table).select(columns).is('deleted_at', null).order('id').range(offset, offset + 999);
             if (ownerField)
                 q = q.eq(ownerField, profile.id);
@@ -36,7 +37,7 @@ export const loadAssociateData = cache(async (): Promise<Bundle> => {
         db.from('projects').select('id,name').eq('active', true).is('deleted_at', null).order('name'),
         db.from('next_action_types').select('label').eq('active', true).is('deleted_at', null).order('sort_order'),
         db.from('cold_reasons').select('label').eq('active', true).is('deleted_at', null).order('sort_order'),
-        all('review_actions', 'id,action,due_date,status,lead_id,cp_id', 'associate_id'),
+        all('review_actions', 'id,action,due_date,status,lead_id,cp_id,completion_comment,published_at', 'associate_id'),
         db.rpc('current_review_period', { p_on: todayIndia() }).maybeSingle(),
         db.from('profiles').select('legacy_key').eq('id', profile.id).single(),
         db.from('data_quality_issues').select('id,detail,table_name,record_ids').eq('assigned_to', profile.id).eq('status', 'open').is('deleted_at', null),

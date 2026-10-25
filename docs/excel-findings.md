@@ -28,7 +28,7 @@ Source read: `~/Downloads/NCR_Channel_10Day_Review_Template.xlsx` (the newest of
 - **Next Action stored as dates** in some rows (Udit's col J has dates, col K has notes): columns are swapped inconsistently.
 - **CP follow-up dates in 2025** while meetings are in 2026 (typing the wrong year).
 - **Rating contradicts remarks**: e.g. "Client booked two units" marked Hot, "Booked unit but cancelled" marked Cold; "Closed" with a Warm rating.
-- **Duplicate people**: same customer on several rows/tabs; the same CP spelled differently ("Abhishek Gupta" twice, "Vikas Walia" as CP and as customer); group names like "Vijay Boken +6", "Ca Shubham & Jatin".
+- **Duplicate people**: repeated customers across rows/tabs, variant CP spellings, names used both as CP and customer, and group names. Use stable keys and ownership to deduplicate; do not publish source customer names in documentation.
 - **Bookings**: blank value/date/plot on some rows; the same customer with several plots (several booking rows for one lead is correct); `Status` Token vs Booking Done inconsistent with remarks; a booking row with no matching meeting row.
 - **CP Name column on bookings is free text**, sometimes with two firms ("Darpan Investment / Diksha Estate") or a note ("Darpan Investment Digital Lead Source" while Source says Direct).
 - Free-form project spelling: `Kudal`, `kudal`, `Kudal ` (trailing space). Projects in use: Kudal, Tilari, Club Lake Reserve ("CLR").

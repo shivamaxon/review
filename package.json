@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "test:db": "node --test supabase/tests/rls.test.mjs",
+    "test:db": "node --test supabase/tests/*.test.mjs",
     "db:bundle": "node scripts/bundle-migrations.mjs",
     "export:csv": "node scripts/export-csv.mjs",
     "seed:users": "tsx --env-file=.env.local scripts/seed-users.ts",
@@ -17,7 +17,9 @@
     "verify:history": "tsx --env-file=.env.local scripts/verify-history.ts",
     "test:history": "tsx --test scripts/history.test.ts",
     "test:ui": "playwright test",
-    "test:associate": "node --import tsx --test scripts/associate.test.ts"
+    "test:associate": "node --import tsx --test scripts/associate.test.ts",
+    "seed:demo": "tsx --env-file=.env.local scripts/seed-demo.ts",
+    "test:review": "node --import tsx --test scripts/review-artifacts.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

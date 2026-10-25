@@ -17,7 +17,7 @@ mkdirSync(outDir, { recursive: true });
 const TABLES = [
   "branches", "profiles", "projects", "cold_reasons", "next_action_types", "review_cycle",
   "cp_firms", "data_quality_issues", "channel_partners", "leads", "interactions", "cp_interactions", "bookings", "booking_status_history",
-  "entry_receipts", "entry_cancellations", "targets", "review_sessions", "review_actions", "audit_log",
+  "entry_receipts", "entry_cancellations", "targets", "review_sessions", "review_actions", "review_rules", "saved_analysis_views", "audit_log",
 ];
 const PAGE = 1000;
 
@@ -30,7 +30,7 @@ const cell = (v) => {
 async function fetchAll(table) {
   const rows = [];
   for (let from = 0; ; from += PAGE) {
-    const res = await fetch(`${url}/rest/v1/${table}?select=*&order=id.asc`, {
+    const res = await fetch(`${url}/rest/v1/${table}?select=*&order=${table==='review_rules'?'branch_id.asc,rule.asc':'id.asc'}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}`, Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
     });
     if (!res.ok) throw new Error(`${table}: HTTP ${res.status} ${await res.text()}`);

@@ -1,0 +1,3 @@
+'use client';
+import Link from 'next/link';
+export default function ErrorPage({error,reset}:{error:Error&{digest?:string};reset:()=>void}){return <section role="alert" className="mx-auto max-w-lg rounded-2xl border p-8"><h1 className="text-2xl font-semibold">We couldn’t open this page</h1><p className="mt-3 text-muted-foreground">Check your connection and try again. Saved records are safe; pending phone entries remain in your local queue.</p>{error.digest&&<p className="mt-2 text-xs">Reference: {error.digest}</p>}<div className="mt-5 flex flex-wrap gap-3"><button className="touch-button bg-teal-800 text-white" onClick={reset}>Try again</button><Link className="touch-button border" href="/">Go to my home</Link></div></section>;}

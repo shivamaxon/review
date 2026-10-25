@@ -275,3 +275,12 @@ These changes are saved locally and have not been committed/pushed or deployed a
 - At the owner’s request, reset temporary credentials for the 10 matched application/Auth accounts, require a password change on next login, and clear their failed-login attempts. All 10 active logins verified successfully. Active flags, roles and ownership were preserved; no unrelated Auth accounts or customer/business records were modified. Credential values and private reset scripts are excluded from Git. Do not repeat the reset automatically.
 - The owner authorised pushing all saved product updates to the existing GitHub repository for its connected Vercel app. Repository visibility is unchanged. Previous local test results above were not rerun for this push; only staged-file safety and targeted sign-in checks were performed.
 - Existing-live activation still requires approval for migration 9 followed by 10. Do not rerun migrations 1–8, recreate users or reload history.
+
+
+## Private admin entry (25 October 2026)
+
+- Owner requested direct admin access while normal password login is diagnosed, and authorised pushing the fix. The normal login page and every existing page are retained. There is no public admin bypass, fake profile, role promotion or service-role data session.
+- `/auth/admin-access` accepts a POST containing a Supabase-issued single-use magic-link proof, verifies it, and admits only an existing active branch/super admin. Invalid/expired proofs and associate accounts are denied. Existing mandatory password setup remains enforced before operational access.
+- `node --import tsx --env-file=.env.local scripts/create-admin-access.ts https://YOUR-APP.vercel.app [existing-admin-email]` creates a private local HTML launcher in ignored `export/admin-access.html`, mode 0600. Without an email it requires exactly one active admin. It checks the existing Auth UUID before minting, never emails anyone, never creates a user, and never prints the token. Keep the file private; generate a fresh one if expired/used. No tokens belong in Git or a public URL.
+- Normal sign-in logs only Supabase error code/status to server logs for diagnosis; invalid API-key errors get a hosting-configuration message. Credentials and tokens are never logged.
+- The owner reports running migrations 9 and 10; read-only live checks confirmed the new review snapshot/demo columns are present. No migration or customer data was changed by this access fix.

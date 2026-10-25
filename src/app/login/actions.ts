@@ -69,6 +69,10 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   const { data: signedIn, error } = await supabase.auth.signInWithPassword({ email, password });
   await recordAttempt(email, ip, !error);
   if (error) {
+    console.error("Supabase sign-in failed", { code: error.code, status: error.status });
+    if (/invalid api key/i.test(error.message)) {
+      return { error: "The app's sign-in configuration is incorrect. Ask your admin to check the hosting API keys and redeploy." };
+    }
     // One message for wrong password / unknown email / disabled account: don't reveal which.
     return { error: "Email or password is wrong, or the account is switched off. Ask your branch admin." };
   }

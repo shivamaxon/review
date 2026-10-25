@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function proxy(request: NextRequest) {
   // Public shell contains no signed-in data; it must load before a session exists.
-  if (request.nextUrl.pathname === "/offline") return NextResponse.next();
+  if (["/offline", "/auth/admin-access"].includes(request.nextUrl.pathname)) return NextResponse.next();
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

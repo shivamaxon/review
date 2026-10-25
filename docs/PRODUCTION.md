@@ -43,3 +43,14 @@ Vercel Hobby is restricted to personal, non-commercial use; this business app re
 Use a private backup repository/vault, not the public application repository’s artifacts. Store Supabase keys only as encrypted hosting/GitHub secrets. Optional encrypted backups require `EXPORT_PASSPHRASE`; keep an offline copy of that passphrase. A lost passphrase cannot be recovered from the app. GitHub artifacts expire after 14 days; copy important recovery points to protected long-term storage. Supabase Auth accounts and full platform recovery require a database/Auth backup in addition to CSV.
 
 The keep-alive workflow only calls `ping`; it does not back up data or guarantee a free project never pauses. If paused, use the README recovery instructions, retain phone queues and do not seed/import again.
+
+
+## Private one-time admin entry
+
+Normal sign-in remains enabled. An owner with the local service-role configuration can run:
+
+```sh
+node --import tsx --env-file=.env.local scripts/create-admin-access.ts https://YOUR-APP.vercel.app
+```
+
+If more than one active admin exists, append the intended existing admin email. Open `export/admin-access.html` locally and click **Open admin**. This single-use proof skips typing credentials; it still requires an existing active admin and completing password setup if flagged. The file is private, ignored by Git and should not be shared or published. Generate a fresh file if it expires or has already been used. No accounts, roles or customer records are changed by generating it.

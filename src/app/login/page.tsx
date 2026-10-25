@@ -18,6 +18,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             Your account has been switched off. Please contact your branch admin.
           </p>
         )}
+        {error === "admin_link" && (
+          <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            This admin link has expired, was already used, or could not be verified. Ask for a fresh private link.
+          </p>
+        )}
         <LoginForm />
       </div>
     </main>

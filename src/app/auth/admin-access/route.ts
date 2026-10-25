@@ -38,8 +38,10 @@ export async function POST(request: Request) {
     .select("role,active,must_change_password")
     .eq("id", data.user.id).is("deleted_at", null).maybeSingle();
   if (profileError || !profile?.active || !isAdmin(profile.role)) {
+    const invalidKey = /(?:invalid|no) api key/i.test(profileError?.message ?? "");
     console.error("Admin link profile check failed", { code: profileError?.code, status: profileStatus, found: !!profile, active: profile?.active });
     await supabase.auth.signOut({ scope: "local" });
+    if (invalidKey) return failure("hosting_public_key_invalid");
     return failure("profile_" + (profileError?.code ?? (!profile ? "missing" : !profile.active ? "inactive" : "not_admin")));
   }
   const response = NextResponse.redirect(new URL(profile.must_change_password ? "/change-password" : "/command", request.url), 303);

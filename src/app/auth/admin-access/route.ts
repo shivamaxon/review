@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { createClient as createUserClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/types";
@@ -41,8 +42,12 @@ export async function POST(request: Request) {
     const invalidKey = /(?:invalid|no) api key/i.test(profileError?.message ?? "");
     console.error("Admin link profile check failed", { code: profileError?.code, status: profileStatus, found: !!profile, active: profile?.active });
     await supabase.auth.signOut({ scope: "local" });
-    if (invalidKey) return failure("hosting_public_key_invalid");
-    return failure("profile_" + (profileError?.code ?? (!profile ? "missing" : !profile.active ? "inactive" : "not_admin")));
+    const response = failure(invalidKey ? "hosting_public_key_invalid" : "profile_" + (profileError?.code ?? (!profile ? "missing" : !profile.active ? "inactive" : "not_admin")));
+    // After a valid proof, permit comparing public configuration without
+    // ever printing API key values, session cookies or the proof itself.
+    response.headers.set("X-Public-Key-Fingerprint", createHash("sha256").update(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!).digest("hex"));
+    response.headers.set("X-Public-Supabase-Host", new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host);
+    return response;
   }
   const response = NextResponse.redirect(new URL(profile.must_change_password ? "/change-password" : "/command", request.url), 303);
   response.headers.set("Cache-Control", "no-store");

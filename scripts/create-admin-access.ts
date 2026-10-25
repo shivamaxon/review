@@ -26,7 +26,7 @@ if (existing.error || existing.data.user.email?.toLowerCase() !== profile.email!
 const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email: profile.email! });
 if (linkError || !link.properties?.hashed_token || link.user.id !== profile.id) throw new Error("Could not create the existing admin's sign-in link.");
 const token = link.properties.hashed_token;
-if (!/^[a-f0-9]{64}$/i.test(token)) throw new Error("Unexpected proof format.");
+if (!/^[a-z0-9_-]{32,256}$/i.test(token)) throw new Error("Unexpected proof format.");
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 await mkdir(resolve("export"), { recursive: true });
 const path = resolve("export/admin-access.html");

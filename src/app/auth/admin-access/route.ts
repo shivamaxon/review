@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   } catch {
     return failure();
   }
-  if (typeof token !== "string" || !/^[a-f0-9]{64}$/i.test(token)) return failure();
+  if (typeof token !== "string" || !/^[a-z0-9_-]{32,256}$/i.test(token)) return failure();
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.verifyOtp({ token_hash: token, type: "magiclink" });

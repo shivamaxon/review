@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient as createUserClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/types";
 
@@ -23,17 +24,23 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.verifyOtp({ token_hash: token, type: "magiclink" });
-  if (error || !data.user) {
+  if (error || !data.user || !data.session) {
     console.error("Admin link verification failed", { code: error?.code, status: error?.status });
     return failure("auth_" + (error?.code ?? String(error?.status ?? "unavailable")));
   }
-  const { data: profile, error: profileError, status: profileStatus } = await supabase.from("profiles")
+  // Use the newly verified user's JWT explicitly for this first RLS read;
+  // do not depend on cookie/session propagation inside the login request.
+  const userClient = createUserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${data.session.access_token}` } },
+  });
+  const { data: profile, error: profileError, status: profileStatus } = await userClient.from("profiles")
     .select("role,active,must_change_password")
     .eq("id", data.user.id).is("deleted_at", null).maybeSingle();
   if (profileError || !profile?.active || !isAdmin(profile.role)) {
     console.error("Admin link profile check failed", { code: profileError?.code, status: profileStatus, found: !!profile, active: profile?.active });
     await supabase.auth.signOut({ scope: "local" });
-    return failure("profile_" + (profileError?.code ?? "unavailable"));
+    return failure("profile_" + (profileError?.code ?? (!profile ? "missing" : !profile.active ? "inactive" : "not_admin")));
   }
   const response = NextResponse.redirect(new URL(profile.must_change_password ? "/change-password" : "/command", request.url), 303);
   response.headers.set("Cache-Control", "no-store");
